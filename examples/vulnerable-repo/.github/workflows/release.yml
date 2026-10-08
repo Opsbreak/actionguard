@@ -1,0 +1,46 @@
+# INTENTIONALLY VULNERABLE -- example input for actionguard. Do not copy.
+# Pattern: supply-chain and privilege issues in a release pipeline: write-all
+# token, mutable refs (branch-pinned reusable workflow receiving every secret,
+# :latest container), an `if:` that is always true, and the whole workspace
+# (including .git/config with the token) uploaded as an artifact.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Release notes
+        required: false
+      dry-run:
+        type: boolean
+        default: false
+
+permissions: write-all
+
+jobs:
+  build:
+    uses: example-org/shared-workflows/.github/workflows/build.yml@main
+    secrets: inherit
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker://ghcr.io/example-org/release-tool:latest
+
+      - name: Create release
+        if: ${{ github.ref_type == 'tag' }} && ${{ !inputs.dry-run }}
+        run: |
+          gh release create "${{ github.ref_name }}" --notes "${{ inputs.notes }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          path: .

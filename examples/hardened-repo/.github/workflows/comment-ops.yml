@@ -1,0 +1,52 @@
+# Hardened counterpart of vulnerable-repo/.github/workflows/comment-ops.yml:
+# the command is only honoured for maintainers, runs on GitHub-hosted runners,
+# deploys the default branch (not the PR), and the target is allow-listed.
+name: ChatOps deploy
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/deploy') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    environment: staging
+    outputs:
+      target: ${{ steps.parse.outputs.target }}
+    steps:
+      - name: Parse command
+        id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          target="$(awk '{print $2}' <<< "$COMMENT_BODY")"
+          case "$target" in
+            staging|production) ;;
+            *) echo "unknown target" >&2; exit 1 ;;
+          esac
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Deploy default branch
+        run: ./scripts/deploy.sh "$TARGET"
+        env:
+          TARGET: ${{ steps.parse.outputs.target }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+
+  announce:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TARGET: ${{ needs.deploy.outputs.target }}
+        run: echo "Deployed to $TARGET"

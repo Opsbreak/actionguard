@@ -1,0 +1,27 @@
+# Hardened counterpart of vulnerable-repo/.github/actions/setup-env/action.yml:
+# inputs reach the shell only via env and are validated before use; the
+# PATH-manipulation input was removed.
+name: Setup environment
+description: Installs the toolchain
+inputs:
+  version:
+    description: Tool version to install (MAJOR.MINOR.PATCH)
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TOOL_VERSION: ${{ inputs.version }}
+      run: |
+        if [[ ! "$TOOL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "invalid version: $TOOL_VERSION" >&2
+          exit 1
+        fi
+        curl -sSfL "https://tools.example.com/${TOOL_VERSION}/install.sh" -o "$RUNNER_TEMP/install.sh"
+        bash "$RUNNER_TEMP/install.sh"
+
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.tool
+        key: tool-${{ inputs.version }}

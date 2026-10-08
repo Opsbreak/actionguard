@@ -1,0 +1,50 @@
+# INTENTIONALLY VULNERABLE -- example input for actionguard. Do not copy.
+# Pattern: script injection from issue titles/bodies (the class behind many
+# real-world "issue title -> RCE" reports), including injection that only
+# becomes visible after following env: and step-output data flow.
+name: Issue triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    env:
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+    steps:
+      - name: Label crash reports
+        run: |
+          echo "Triaging issue #${{ github.event.issue.number }}"
+          if [[ "${{ github.event.issue.title }}" == *"crash"* ]]; then
+            gh issue edit "${{ github.event.issue.number }}" --add-label bug
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Extract component
+        id: meta
+        run: |
+          component="${ISSUE_TITLE%%:*}"
+          echo "component=$component" >> "$GITHUB_OUTPUT"
+
+      - name: Log
+        run: echo "Component ${{ steps.meta.outputs.component }} reported in ${{ env.ISSUE_TITLE }}"
+
+      - name: Shell variable usage is safe (not reported)
+        run: echo "Title was -- $ISSUE_TITLE"
+
+      - name: Thank the reporter
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `${{ github.event.issue.body }}`;
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `Thanks! We received: ${body.slice(0, 80)}`,
+            });

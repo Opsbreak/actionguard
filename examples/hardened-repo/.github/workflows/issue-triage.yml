@@ -1,0 +1,49 @@
+# Hardened counterpart of vulnerable-repo/.github/workflows/issue-triage.yml.
+# Untrusted values only ever reach the shell as quoted environment variables,
+# and github-script reads them from context.payload instead of `${{ }}`.
+name: Issue triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    env:
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - name: Label crash reports
+        run: |
+          echo "Triaging issue #${ISSUE_NUMBER}"
+          if [[ "$ISSUE_TITLE" == *"crash"* ]]; then
+            gh issue edit "$ISSUE_NUMBER" --add-label bug
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Extract component
+        id: meta
+        run: |
+          component="${ISSUE_TITLE%%:*}"
+          echo "component=$component" >> "$GITHUB_OUTPUT"
+
+      - name: Log
+        env:
+          COMPONENT: ${{ steps.meta.outputs.component }}
+        run: echo "Component $COMPONENT reported in $ISSUE_TITLE"
+
+      - name: Thank the reporter
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const body = context.payload.issue.body ?? "";
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `Thanks! We received: ${body.slice(0, 80)}`,
+            });

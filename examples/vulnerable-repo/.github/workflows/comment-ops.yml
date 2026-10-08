@@ -1,0 +1,40 @@
+# INTENTIONALLY VULNERABLE -- example input for actionguard. Do not copy.
+# Pattern: ChatOps. Anyone can comment "/deploy", the job runs on a
+# self-hosted runner, checks out the PR and executes it with a deploy key.
+# The comment text also flows into a job output consumed by another job.
+name: ChatOps deploy
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  deploy:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/deploy')
+    runs-on: [self-hosted, linux, x64]
+    outputs:
+      target: ${{ steps.parse.outputs.target }}
+    steps:
+      - name: Parse command
+        id: parse
+        run: |
+          TARGET=$(echo "${{ github.event.comment.body }}" | awk '{print $2}')
+          echo "target=$TARGET" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
+
+      - name: Check out PR
+        run: gh pr checkout ${{ github.event.issue.number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Deploy
+        run: ./scripts/deploy.sh
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+
+  announce:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deployed to ${{ needs.deploy.outputs.target }}"

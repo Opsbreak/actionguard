@@ -1,0 +1,46 @@
+# INTENTIONALLY VULNERABLE -- example input for actionguard. Do not copy.
+# Pattern: "pwn request". pull_request_target runs with secrets and a write
+# token, then checks out and builds the fork's code (npm lifecycle scripts run
+# attacker code). Same class as the 2021-2024 Security Lab / pwn-request reports.
+name: PR preview
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy preview
+        uses: nwtgck/actions-netlify@v3
+        with:
+          publish-dir: ./dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Preview for ${{ github.event.pull_request.title }}"
+
+      - name: Comment
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "Preview for branch ${{ github.head_ref }} is ready"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

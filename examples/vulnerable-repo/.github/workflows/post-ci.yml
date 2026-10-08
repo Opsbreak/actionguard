@@ -1,0 +1,37 @@
+# INTENTIONALLY VULNERABLE -- example input for actionguard. Do not copy.
+# Pattern: artifact poisoning. A privileged workflow_run job downloads the
+# artifact produced by an untrusted pull_request run into the workspace root,
+# trusts its contents and then runs npm scripts from that workspace.
+name: Post CI results
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-build
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read PR metadata
+        run: |
+          echo "PR_NUMBER=$(cat pr_number.txt)" >> $GITHUB_ENV
+          echo "BRANCH=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_ENV
+
+      - name: Publish coverage
+        run: npm run coverage:publish
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

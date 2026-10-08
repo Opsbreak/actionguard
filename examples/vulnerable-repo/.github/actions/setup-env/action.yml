@@ -1,0 +1,25 @@
+# INTENTIONALLY VULNERABLE -- example input for actionguard. Do not copy.
+# Pattern: composite action interpolating its inputs into shell code; callers
+# frequently pass PR titles or branch names straight into such inputs.
+name: Setup environment
+description: Installs the toolchain and configures PATH
+inputs:
+  version:
+    description: Tool version to install
+    required: true
+  extra-path:
+    description: Extra directory to add to PATH
+    required: false
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        curl -sSfL "https://tools.example.com/${{ inputs.version }}/install.sh" -o install.sh
+        bash install.sh
+        echo "${{ inputs.extra-path }}" >> "$GITHUB_PATH"
+
+    - uses: actions/cache@v4
+      with:
+        path: ~/.tool
+        key: tool-${{ inputs.version }}
