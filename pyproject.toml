@@ -31,7 +31,7 @@ dependencies = ["PyYAML>=6.0.3"]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4", "ruff>=0.5"]
+dev = ["pytest>=7.4", "ruff>=0.16.10"]
 
 [project.scripts]
 actionguard = "actionguard.cli:main"
